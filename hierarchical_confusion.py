@@ -1,5 +1,6 @@
 import pandas as pd
 import numpy as np
+from tqdm import tqdm
 from collections import defaultdict
 from sklearn.metrics import confusion_matrix
 from scipy.sparse import csr_matrix
@@ -165,30 +166,48 @@ def translate_ind_to_code(pairs, ind2c):
     return code_pairs
     
 def convert_into_df(tuples):
-    return pd.DataFrame(tuples, columns = ["Identity Code","Identity Count", "Identity Percentage", "Preferred Prediction Code", "Preferred Prediction Count", "Preferred Prediction Percentage"])
+    df = pd.DataFrame(tuples, columns = ["Identity Code","Identity Count", "Identity Percentage", "Preferred Prediction Code", "Preferred Prediction Count", "Preferred Prediction Percentage"])
+    df["Match"] = df["Identity Code"]==df["Preferred Prediction Code"]
+    return df
 
 def run(preds, golds, family_filters, code_dict_reverse, filter_ands = True):
     # Data Setup
-    print(preds.T.shape, golds.T.shape, family_filters.T.shape)
+    #print(preds.T.shape, golds.T.shape, family_filters.T.shape)
     filtered_preds = apply_filters_smart(preds.T, family_filters.T)
-    print(f"filtered_preds: {filtered_preds.shape}")
+    #print(f"filtered_preds: {filtered_preds.shape}")
     filtered_golds = apply_filters_smart(golds.T, family_filters.T)
-    print(f"filtered_golds: {filtered_golds.shape}")
+    #print(f"filtered_golds: {filtered_golds.shape}")
     all_conf_matrices = produce_all_conf_matrices(filtered_preds, filtered_golds, filter_ands = filter_ands)
-    print(f"All confusion matrices: {np.array(all_conf_matrices).shape}")
+    #print(f"All confusion matrices: {np.array(all_conf_matrices).shape}")
     result=translate_ind_to_code(analyse_all_conf_matrices(all_conf_matrices), code_dict_reverse)
     return convert_into_df(result)
     
 def coocurrence(preds, golds, family_filters, code_dict_reverse):
     result = run(preds, golds, family_filters, code_dict_reverse, False)
-    filtered_result = result[result["Identity Code"] !="Slack"]
+    filtered_result = result[result["Identity Code"] !="OOF"]
     return filtered_result
     
 def hierarchical_confusion_unscaled(preds, golds, family_filters, code_dict_reverse):
     result = run(preds, golds, family_filters, code_dict_reverse, True)
-    filtered_result = result[result["Identity Code"] !="Slack"]
+    filtered_result = result[result["Identity Code"] !="OOF"]
     return filtered_result
     
+def hierarchical_confusion_unscaled_one(preds, golds, family_filters, code_dict_reverse, i=0):
+    result = run(preds, golds, family_filters.T[i].T, code_dict_reverse, True).drop_duplicates()
+    result["Num Known Family Codes"] = sum(family_filters.T[i])
+    filtered_result = result[result["Identity Code"] !="OOF"]
+    return filtered_result
+
+def hierarchical_confusion_unscaled_all(preds, golds, family_filters, code_dict_reverse):
+    filters = family_filters.shape[1]
+    results = []
+    for i in tqdm(range(filters)):
+        result = run(preds, golds, family_filters.T[i].T, code_dict_reverse, True)
+        result["Num Known Family Codes"] = sum(family_filters.T[i])
+        results.append(result)
+    results = pd.concat(results).drop_duplicates()
+    filtered_result = results[results["Identity Code"] !="OOF"]
+    return filtered_result
 if __name__=="__main__":
     #data_read
     preds = pd.read_csv("sample_predictions.csv").drop(columns=["Unnamed: 0"])
@@ -222,4 +241,9 @@ if __name__=="__main__":
     hi_results.to_csv("pred_gold_hierarchical_confusion.csv", index=False)
     print("transposed")
     hi_results_T = hierarchical_confusion_unscaled(golds_converted, preds_converted, family_filters, code_dict_r)
-    hi_results.to_csv("gold_pred_hierarchical_confusion.csv", index=False)
+    hi_results_T.to_csv("gold_pred_hierarchical_confusion.csv", index=False)
+    print("iterative")
+    hi_results_T_0 = hierarchical_confusion_unscaled_one(golds_converted, preds_converted, family_filters, code_dict_r)
+    hi_results_T_0.to_csv("gold_pred_hierarchical_confusion_0.csv", index=False)
+    hi_results_T_all = hierarchical_confusion_unscaled_all(golds_converted, preds_converted, family_filters, code_dict_r)
+    hi_results_T_all.to_csv("gold_pred_hierarchical_confusion_all.csv", index=False)
