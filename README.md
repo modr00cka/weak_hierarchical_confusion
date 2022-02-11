@@ -19,9 +19,27 @@ If we take the problems of ontology-defined similarity and 1-to-1 correspondence
 
 Assumption (1) 1-to-1 true positive correspondence: If a label is present both in the prediction and gold-standard sets for a document, this is considered a True Positive, and is removed from mismatch calculation.
 
+![1](Images/true_positive_assumption.png)
+<br><br>
+<br><br>
+<center>Figure 1: A standard flat output evaluation approach to ICD coding task. Two sample code families indicated.</center>
+<br><br>
+
 Assumption (2) keeping it within the family: Disregarding true positives, non-true-positive codes in the prediction set are matched with non-true-postive codes in gold standard set, within the same family of codes. That is to say, if A.1, A.2, B.1 are predicted and A.1, A.3, B.2, are expected, there is a match A.1-A.1, the mismatches are A.2-A.3 (belonging to the A-family), and B.1-B.2 (belonging to the B-family).
 
+![2](Images/within_family_assumption.png)
+<br><br>
+<br><br>
+<center>Figure 1: A standard flat output evaluation approach to ICD coding task. Two sample code families indicated.</center>
+<br><br>
+
 Assumption (3) Out-Of-Family Scenario: If during mismatch calculation a code from one of the prediction/gold set cannot be match with any code from the other, as there is no code from that family present in the set, the code is associated with a special OOF code. For instance, if A.1, A.2, B.1 are predicted and A.1, A.3 are expected, A.1-A.1 are a match, A.2-A.3 are a mismatch, and as B.1 does not have a counterpart in the expected set, B.1 is associated with an OOF as mismatch (B.1-OOF). 
+
+![3](Images/oof_assumption.png)
+<br><br>
+<br><br>
+<center>Figure 1: A standard flat output evaluation approach to ICD coding task. Two sample code families indicated.</center>
+<br><br>
 
 ## Use
 
