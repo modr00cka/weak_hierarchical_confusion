@@ -22,7 +22,7 @@ Assumption (1) 1-to-1 true positive correspondence: If a label is present both i
 ![1](Images/true_positive_assumption.png)
 <br><br>
 <br><br>
-<center>Figure 1: A standard flat output evaluation approach to ICD coding task. Two sample code families indicated.</center>
+<center>Figure 1: 1-to-1 True Positive Correspondence Assumption. Codes 364.00, 364.02, 364.03, and 364.04 are predicted, while codes 364.00, 364.01, and 364.02 are expected. Left: Co-occurrence matrix between prediction and gold standard; Right: Same matrix after applying the assumption - codes that match between prediction and gold standard are not considered in mismatches./center>
 <br><br>
 
 Assumption (2) keeping it within the family: Disregarding true positives, non-true-positive codes in the prediction set are matched with non-true-postive codes in gold standard set, within the same family of codes. That is to say, if A.1, A.2, B.1 are predicted and A.1, A.3, B.2, are expected, there is a match A.1-A.1, the mismatches are A.2-A.3 (belonging to the A-family), and B.1-B.2 (belonging to the B-family).
@@ -30,7 +30,7 @@ Assumption (2) keeping it within the family: Disregarding true positives, non-tr
 ![2](Images/within_family_assumption.png)
 <br><br>
 <br><br>
-<center>Figure 1: A standard flat output evaluation approach to ICD coding task. Two sample code families indicated.</center>
+<center>Figure 2: Within-Family Confusoin Assumption. Codes 364.00, 364.02, 364.03, and 365.02 are predicted, while codes 364.00, 364.02, and 365.01 are expected. Left: Co-occurrence matrix between prediction and gold standard; Right: Same co-occurrence matrix with within-family confusion assumption. Mismatches are drawn only between codes within the same family</center>
 <br><br>
 
 Assumption (3) Out-Of-Family Scenario: If during mismatch calculation a code from one of the prediction/gold set cannot be match with any code from the other, as there is no code from that family present in the set, the code is associated with a special OOF code. For instance, if A.1, A.2, B.1 are predicted and A.1, A.3 are expected, A.1-A.1 are a match, A.2-A.3 are a mismatch, and as B.1 does not have a counterpart in the expected set, B.1 is associated with an OOF as mismatch (B.1-OOF). 
@@ -38,7 +38,7 @@ Assumption (3) Out-Of-Family Scenario: If during mismatch calculation a code fro
 ![3](Images/oof_assumption.png)
 <br><br>
 <br><br>
-<center>Figure 1: A standard flat output evaluation approach to ICD coding task. Two sample code families indicated.</center>
+<center>Figure 3: The Out-of-Family Scenario. Codes 364.00 and 364.02 are predicted, while codes 364.00, 364.01, and 364.02 are expected. After applying Assumption (1) the code 364.01 present in the gold standard has no valid sibling code left in the prediction set to be mismatched with. Hence it is mismatched with the Out-of-Family label (OOF).</center>
 <br><br>
 
 ## Use
