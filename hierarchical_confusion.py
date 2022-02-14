@@ -88,12 +88,12 @@ def roll_single_filter(filtered_pred, filtered_gold, filter_ands = True):
         v += new_v
     return r,c,v
     
-def unravel_rolled_filter(r,c,v):
+def unravel_rolled_filter(r,c,v, oof_id = 99):
     counter = defaultdict(int)
     for i in range(len(r)):
         counter[(r[i], c[i])]+=v[i]
-    rows = [99]
-    cols = [99]
+    rows = [oof_id]
+    cols = [oof_id]
     vals = [0]
     
     for key in counter.keys():
@@ -102,41 +102,41 @@ def unravel_rolled_filter(r,c,v):
         vals.append(counter[key])
     return rows, cols, vals
     
-def roll_and_unravel_filter(filtered_pred, filtered_gold, filter_ands = True):
+def roll_and_unravel_filter(filtered_pred, filtered_gold, filter_ands = True, oof_id = 99):
     r,c,v = roll_single_filter(filtered_pred, filtered_gold, filter_ands) # it seems the conf_matrix operation is not working properly here
-    return unravel_rolled_filter(r,c,v)
+    return unravel_rolled_filter(r,c,v, oof_id)
     
-def roll_and_unravel_all_filters(filtered_pred_tensor, filtered_gold_tensor, filter_ands = True):
+def roll_and_unravel_all_filters(filtered_pred_tensor, filtered_gold_tensor, filter_ands = True, oof_id = 99):
     filtered_csr_data = []
     for i in range(filtered_pred_tensor.shape[0]):
-        filtered_csr_data.append(roll_and_unravel_filter(filtered_pred_tensor[i].T, filtered_gold_tensor[i].T, filter_ands))
+        filtered_csr_data.append(roll_and_unravel_filter(filtered_pred_tensor[i].T, filtered_gold_tensor[i].T, filter_ands, oof_id))
     return filtered_csr_data
 
-def combine_csr_matrices(csr_def_list):
+def combine_csr_matrices(csr_def_list, oof_id=99):
     counter = defaultdict(int)
     rows = []
     cols = []
     vals = []
     for triplet in csr_def_list:
         r,c,v = triplet
-        rx, cx, vx = unravel_rolled_filter(r,c,v)
+        rx, cx, vx = unravel_rolled_filter(r,c,v, oof_id)
         rows += rx
         cols += cx
         vals += vx
     return rows, cols, vals
 
-def produce_conf_matrix(pred, gold, filter_ands = True):
-    unraveled = roll_and_unravel_filter(pred.T, gold.T, filter_ands)
+def produce_conf_matrix(pred, gold, filter_ands = True, oof_id = 99):
+    unraveled = roll_and_unravel_filter(pred.T, gold.T, filter_ands, oof_id)
     # print(f"unraveled: {unraveled}")
     c_mat = csr_matrix((unraveled[2],(unraveled[0],unraveled[1])))
     return c_mat
     
-def produce_all_conf_matrices(preds, golds, filter_ands = True):
+def produce_all_conf_matrices(preds, golds, filter_ands = True, oof_id = 99):
     pairs = list(zip(preds, golds))
     c_mats = []
     for pair in pairs:
         p, g = pair
-        c_mats.append(produce_conf_matrix(p,g, filter_ands))
+        c_mats.append(produce_conf_matrix(p,g, filter_ands, oof_id))
     return c_mats
     
 def analyse_conf_matrix(c_mat):
@@ -149,7 +149,10 @@ def analyse_conf_matrix(c_mat):
         full_sum = (np.sum(c_mat[:,y]))
         xs.append(x)
         x_val = c_mat[x,y] # determine the value for the maximum
-        results.append((y, y_val, y_val/full_sum, x, x_val, x_val/full_sum))
+        oof = c_mat[-1,y]
+        oof_percent =  round(oof/full_sum, 3)
+        recall_percent = round(y_val/full_sum, 3)
+        results.append((y, y_val, recall_percent, x, x_val, round(x_val/full_sum, 3), oof_percent, round(1 - recall_percent - oof_percent,3)))
     return results
     
 def analyse_all_conf_matrices(c_mats):
@@ -161,12 +164,12 @@ def analyse_all_conf_matrices(c_mats):
 def translate_ind_to_code(pairs, ind2c):
     code_pairs = []
     for pair in pairs:
-        x_id, x_count, x_pc, y_id, y_count, y_pc = pair
-        code_pairs.append((ind2c[x_id],x_count, x_pc, ind2c[y_id], y_count, y_pc))
+        x_id, x_count, x_pc, y_id, y_count, y_pc, oof_pc, ifc_pc = pair
+        code_pairs.append((ind2c[x_id],x_count, x_pc, ind2c[y_id], y_count, y_pc, oof_pc, ifc_pc))
     return code_pairs
     
 def convert_into_df(tuples):
-    df = pd.DataFrame(tuples, columns = ["Identity Code","Identity Count", "Identity Percentage", "Preferred Prediction Code", "Preferred Prediction Count", "Preferred Prediction Percentage"])
+    df=pd.DataFrame(tuples, columns = ["Identity Code","Identity Count", "Identity Percentage", "Preferred Prediction Code", "Preferred Prediction Count", "Preferred Prediction Percentage", "OOF-Percentage", "In-Family-Confusion Percentage"])
     df["Match"] = df["Identity Code"]==df["Preferred Prediction Code"]
     return df
 
@@ -177,7 +180,7 @@ def run(preds, golds, family_filters, code_dict_reverse, filter_ands = True):
     #print(f"filtered_preds: {filtered_preds.shape}")
     filtered_golds = apply_filters_smart(golds.T, family_filters.T)
     #print(f"filtered_golds: {filtered_golds.shape}")
-    all_conf_matrices = produce_all_conf_matrices(filtered_preds, filtered_golds, filter_ands = filter_ands)
+    all_conf_matrices = produce_all_conf_matrices(filtered_preds, filtered_golds, filter_ands = filter_ands, oof_id = 99)
     #print(f"All confusion matrices: {np.array(all_conf_matrices).shape}")
     result=translate_ind_to_code(analyse_all_conf_matrices(all_conf_matrices), code_dict_reverse)
     return convert_into_df(result)
