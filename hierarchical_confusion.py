@@ -14,7 +14,7 @@ from scipy.sparse import coo_matrix
 # Keep the ANDs or not? there could be a correlation?
 # Keeping ANDs in results in a co-occurrence matrix (co-occurrence between predictions and gold standard)
 
-def confusion_mat_st(pred_v, gold_v, filter_ands = True, slack_variable = 99):
+def confusion_mat_st(pred_v, gold_v, filter_ands = True, slack_variable = 9000):
     rows = []
     cols = []
     vals = []
@@ -88,7 +88,7 @@ def roll_single_filter(filtered_pred, filtered_gold, filter_ands = True):
         v += new_v
     return r,c,v
     
-def unravel_rolled_filter(r,c,v, oof_id = 99):
+def unravel_rolled_filter(r,c,v, oof_id = 9000):
     counter = defaultdict(int)
     for i in range(len(r)):
         counter[(r[i], c[i])]+=v[i]
@@ -102,17 +102,17 @@ def unravel_rolled_filter(r,c,v, oof_id = 99):
         vals.append(counter[key])
     return rows, cols, vals
     
-def roll_and_unravel_filter(filtered_pred, filtered_gold, filter_ands = True, oof_id = 99):
+def roll_and_unravel_filter(filtered_pred, filtered_gold, filter_ands = True, oof_id = 9000):
     r,c,v = roll_single_filter(filtered_pred, filtered_gold, filter_ands) # it seems the conf_matrix operation is not working properly here
     return unravel_rolled_filter(r,c,v, oof_id)
     
-def roll_and_unravel_all_filters(filtered_pred_tensor, filtered_gold_tensor, filter_ands = True, oof_id = 99):
+def roll_and_unravel_all_filters(filtered_pred_tensor, filtered_gold_tensor, filter_ands = True, oof_id = 9000):
     filtered_csr_data = []
     for i in range(filtered_pred_tensor.shape[0]):
         filtered_csr_data.append(roll_and_unravel_filter(filtered_pred_tensor[i].T, filtered_gold_tensor[i].T, filter_ands, oof_id))
     return filtered_csr_data
 
-def combine_csr_matrices(csr_def_list, oof_id=99):
+def combine_csr_matrices(csr_def_list, oof_id = 9000):
     counter = defaultdict(int)
     rows = []
     cols = []
@@ -125,13 +125,13 @@ def combine_csr_matrices(csr_def_list, oof_id=99):
         vals += vx
     return rows, cols, vals
 
-def produce_conf_matrix(pred, gold, filter_ands = True, oof_id = 99):
+def produce_conf_matrix(pred, gold, filter_ands = True, oof_id = 9000):
     unraveled = roll_and_unravel_filter(pred.T, gold.T, filter_ands, oof_id)
     # print(f"unraveled: {unraveled}")
     c_mat = csr_matrix((unraveled[2],(unraveled[0],unraveled[1])))
     return c_mat
     
-def produce_all_conf_matrices(preds, golds, filter_ands = True, oof_id = 99):
+def produce_all_conf_matrices(preds, golds, filter_ands = True, oof_id = 9000):
     pairs = list(zip(preds, golds))
     c_mats = []
     for pair in pairs:
@@ -173,39 +173,42 @@ def convert_into_df(tuples):
     df["Match"] = df["Identity Code"]==df["Preferred Prediction Code"]
     return df
 
-def run(preds, golds, family_filters, code_dict_reverse, filter_ands = True):
+def run(preds, golds, family_filters, code_dict_reverse, filter_ands = True, oof_id = 9000):
     # Data Setup
+    #print(f"preds shape: {preds.T.shape}; family_filters shape: {family_filters.T.shape}")
     #print(preds.T.shape, golds.T.shape, family_filters.T.shape)
     filtered_preds = apply_filters_smart(preds.T, family_filters.T)
     #print(f"filtered_preds: {filtered_preds.shape}")
     filtered_golds = apply_filters_smart(golds.T, family_filters.T)
     #print(f"filtered_golds: {filtered_golds.shape}")
-    all_conf_matrices = produce_all_conf_matrices(filtered_preds, filtered_golds, filter_ands = filter_ands, oof_id = 99)
+    all_conf_matrices = produce_all_conf_matrices(filtered_preds, filtered_golds, filter_ands = filter_ands, oof_id = 9000)
     #print(f"All confusion matrices: {np.array(all_conf_matrices).shape}")
     result=translate_ind_to_code(analyse_all_conf_matrices(all_conf_matrices), code_dict_reverse)
     return convert_into_df(result)
     
-def coocurrence(preds, golds, family_filters, code_dict_reverse):
-    result = run(preds, golds, family_filters, code_dict_reverse, False)
+def coocurrence(preds, golds, family_filters, code_dict_reverse, oof_id = 9000):
+    result = run(preds, golds, family_filters, code_dict_reverse, False, oof_id)
     filtered_result = result[result["Identity Code"] !="OOF"]
     return filtered_result
     
-def hierarchical_confusion_unscaled(preds, golds, family_filters, code_dict_reverse):
-    result = run(preds, golds, family_filters, code_dict_reverse, True)
+def hierarchical_confusion_unscaled(preds, golds, family_filters, code_dict_reverse, oof_id = 9000):
+    result = run(preds, golds, family_filters, code_dict_reverse, True, oof_id)
     filtered_result = result[result["Identity Code"] !="OOF"]
     return filtered_result
     
-def hierarchical_confusion_unscaled_one(preds, golds, family_filters, code_dict_reverse, i=0):
-    result = run(preds, golds, family_filters.T[i].T, code_dict_reverse, True).drop_duplicates()
+def hierarchical_confusion_unscaled_one(preds, golds, family_filters, code_dict_reverse, i=0, oof_id = 9000):
+    fltr = family_filters.T[i]
+    result = run(preds, golds,  fltr.reshape(fltr.shape[0],1), code_dict_reverse, True, oof_id).drop_duplicates()
     result["Num Known Family Codes"] = sum(family_filters.T[i])
     filtered_result = result[result["Identity Code"] !="OOF"]
     return filtered_result
 
-def hierarchical_confusion_unscaled_all(preds, golds, family_filters, code_dict_reverse):
+def hierarchical_confusion_unscaled_all(preds, golds, family_filters, code_dict_reverse, oof_id = 9000):
     filters = family_filters.shape[1]
     results = []
     for i in tqdm(range(filters)):
-        result = run(preds, golds, family_filters.T[i].T, code_dict_reverse, True)
+        fltr = family_filters.T[i]
+        result = run(preds, golds, fltr.reshape(fltr.shape[0],1), code_dict_reverse, True, oof_id)
         result["Num Known Family Codes"] = sum(family_filters.T[i])
         results.append(result)
     results = pd.concat(results).drop_duplicates()
@@ -215,7 +218,6 @@ if __name__=="__main__":
     #data_read
     preds = pd.read_csv("sample_predictions.csv").drop(columns=["Unnamed: 0"])
     golds = pd.read_csv("sample_gold.csv").drop(columns=["Unnamed: 0"])
-    
     #sample filter_setup
     codes = list(preds.columns)
     code_dict = dict(zip(codes, range(len(codes))))
@@ -234,9 +236,11 @@ if __name__=="__main__":
     mat = coo_matrix((vals, (rows, cols)))
     family_filters = mat.toarray() 
     
-    preds_converted = (preds>0.5)*1
-    golds_converted = (golds>0.5)*1
-    code_dict_r[99]="OOF"
+    preds_converted = (preds>=0.5)*1
+    golds_converted = (golds>0)*1
+    code_dict_r[9000]="OOF"
+    
+    """
     co_results = coocurrence(preds_converted, golds_converted, family_filters, code_dict_r)
     co_results.to_csv("pred_gold_coocurrence.csv", index=False)
     print("vanilla")
@@ -246,7 +250,13 @@ if __name__=="__main__":
     hi_results_T = hierarchical_confusion_unscaled(golds_converted, preds_converted, family_filters, code_dict_r)
     hi_results_T.to_csv("gold_pred_hierarchical_confusion.csv", index=False)
     print("iterative")
+    """
     hi_results_T_0 = hierarchical_confusion_unscaled_one(golds_converted, preds_converted, family_filters, code_dict_r)
     hi_results_T_0.to_csv("gold_pred_hierarchical_confusion_0.csv", index=False)
     hi_results_T_all = hierarchical_confusion_unscaled_all(golds_converted, preds_converted, family_filters, code_dict_r)
     hi_results_T_all.to_csv("gold_pred_hierarchical_confusion_all.csv", index=False)
+    
+    hi_results_0 = hierarchical_confusion_unscaled_one(preds_converted, golds_converted, family_filters, code_dict_r)
+    hi_results_0.to_csv("pred_gold_hierarchical_confusion_0.csv", index=False)
+    hi_results_all = hierarchical_confusion_unscaled_all(preds_converted, golds_converted, family_filters, code_dict_r)
+    hi_results_all.to_csv("pred_gold_hierarchical_confusion_all.csv", index=False)
